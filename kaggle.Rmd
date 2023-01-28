@@ -1,0 +1,380 @@
+---
+title: "Kaggle IF 1"
+author: "Team 11 : Lukas TAUCH / Mélodie ASSADI"
+date: "2022-12-09"
+output: 
+ rmdformats::readthedown:
+     highlight: kate
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load the data
+Here the data contain the variable **y** to explain.
+Our purpose is to find a **high accuracy** prediction model in **train** that we can apply in **test**.
+
+```{r}
+data <- read.csv("train.csv")
+test_set <- read.csv("test.csv")
+head(data)
+str(data)
+```
+
+# Char -> Num
+
+Here we are going to digitize all the **char** to have only quantitative and non-qualitative variables (for our 2 data)
+
+```{r}
+data$Sex <- factor(data$Sex, levels = c("F","M"), labels = c(0,1))
+data$ChestPainType <- factor(data$ChestPainType, levels = c("NAP","ASY","TA","ATA"), labels = c(0,1,2,3))
+data$RestingECG <- factor(data$RestingECG, levels = c("Normal","ST","LVH"), labels = c(0,1,2))
+data$ExerciseAngina <- factor(data$ExerciseAngina, levels = c("N","Y"), labels = c(0,1)) 
+data$ST_Slope <- factor(data$ST_Slope, levels = c("Flat","Up","Down"), labels = c(0,1,2))
+
+
+
+data$Sex <- as.numeric(data$Sex)
+data$ChestPainType <- as.numeric(data$ChestPainType)
+data$RestingECG <- as.numeric(data$RestingECG)
+data$ExerciseAngina <- as.numeric(data$ExerciseAngina)
+data$ST_Slope <- as.numeric(data$ST_Slope)
+
+#data
+str(data)
+```
+
+```{r}
+test_set$Sex <- factor(test_set$Sex, levels = c("F","M"), labels = c(0,1))
+test_set$ChestPainType <- factor(test_set$ChestPainType, levels = c("NAP","ASY","TA","ATA"), labels = c(0,1,2,3))
+test_set$RestingECG <- factor(test_set$RestingECG, levels = c("Normal","ST","LVH"), labels = c(0,1,2))
+test_set$ExerciseAngina <- factor(test_set$ExerciseAngina, levels = c("N","Y"), labels = c(0,1)) 
+test_set$ST_Slope <- factor(test_set$ST_Slope, levels = c("Flat","Up","Down"), labels = c(0,1,2))
+
+
+
+test_set$Sex <- as.numeric(test_set$Sex)
+test_set$ChestPainType <- as.numeric(test_set$ChestPainType)
+test_set$RestingECG <- as.numeric(test_set$RestingECG)
+test_set$ExerciseAngina <- as.numeric(test_set$ExerciseAngina)
+test_set$ST_Slope <- as.numeric(test_set$ST_Slope)
+
+#test_set
+str(test_set)
+```
+
+# split
+
+We come to split our train to **evaluate** our model.
+
+```{r warning=FALSE}
+require(caTools)
+
+set.seed(123)  
+
+
+split = sample.split(data$HeartDisease, SplitRatio = 0.8)
+
+training = subset(data, split == TRUE)
+testing = subset(data, split == FALSE)
+
+#dim(training)
+#dim(testing)
+```
+
+# Scale data
+
+We scale our variables so that they are **scaled**.
+```{r}
+training[,1:11] = scale(training[,1:11])
+testing[,1:11] = scale(testing[,1:11])
+test_set[,] = scale(test_set[,])
+```
+
+# PCA
+
+```{r message=FALSE, warning=FALSE}
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+
+res.pca <- PCA(data, scale.unit = TRUE, graph = FALSE)
+```
+
+```{r}
+print(res.pca)
+```
+We look at the eigen values of our pca.
+```{r}
+get_eigenvalue(res.pca)
+```
+
+```{r}
+fviz_eig(res.pca, choice = "eigenvalue", addlabels=TRUE)
+```
+The eigenvalues represent the amount of variance explained by each dimension.
+Here we observe that we have obtained the screeplot of the eigenvalues.
+In general, there are two methods to determine the number of axes to take into account. Either we retain the axes where the eigenvalues are greater than 1 (Kaiser criteria) or we take the eigenvalues which dominate the others. Here as we display a screeplot we retain the axes where the eigenvalues dominate the others.
+
+When the values  starts to begin to become constant we can admit that the extra dimensions will not bring more interesting information.
+Here, we keep the axis which is associated with the eigenvalue equal to 3.1 as well as the axis associated with the eigenvalue equal to 1.5.
+
+```{r}
+fviz_pca_var(res.pca, repel = TRUE, col.var = "steelblue")
+```
+This graph shows us the relationships between the variables.
+Here we can see that Exercice Angina, RestingECG,cholesterol and St_slope are the variables which are furthest from the origin and which are close to the axes, so this variables are good represented by their axes .
+
+The **cosine of the angle** between the arrows representing **2 variables** in the space of origins is equal to the linear **correlation coefficient** between the **2 variables**.
+
+The graph of the circle of correlation makes it possible to interpret the graph of the individuals.
+
+```{r}
+fviz_cos2(res.pca, choice = "var", axes = 1:2)
+```
+Here we can see that the variables cholesterol, exerciceangina, oldpeak,MaxHR and Age are the variables which are the best represented.So it is consistent with what we tell before.
+```{r}
+fviz_pca_var(res.pca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE )
+```
+Here, the variables with low cos2 values will be colored “white”
+the variables with average cos2 values will be colored “blue”
+the variables with high cos2 values will be colored “red”
+So, the closer a variable is to the correlation circle, the better its representation on the PCA map (and it is more important for interpreting the principal components into consideration)
+Variables that are closer to the center of the graph are less important for the first components.
+
+
+```{r}
+dimdesc(res.pca)
+```
+
+# Extract the result for individuals 
+
+```{r}
+ ind <- get_pca_ind(res.pca)
+ head(ind$coord) # coordinates of individuals
+```
+
+Here we show the contribution of each variables for the axes.
+
+```{r}
+head(ind$contrib, 4)
+```
+
+The larger the value of the contribution is , the more the variable contributes to the principal component in question.
+
+Here we plot the 10 first variables which contributes better to the axis 1.
+```{r}
+fviz_contrib(res.pca, choice = "var", axes = 1, top = 10)
+```
+The red dotted line, on the graph above, indicates the expected average contribution.
+
+Here we plot the 10 first variables which contributes better to axis 2. 
+```{r}
+fviz_contrib(res.pca, choice = "var", axes = 2, top = 10)
+```
+
+It is possible to use the corrplot() function to highlight the most contributing variables for each dimension.
+```{r}
+#library("corrplot")
+#corrplot(var$contrib, is.corr=FALSE)  
+```
+
+Representation of the graph of **individuals**.
+```{r}
+fviz_pca_ind(res.pca, geom="point", pointsize = 2)
+```
+Here we can see that the individuals are rather concentrated at the level of axis 1 which is normal because axis 1 represents the axis with the most inertia.
+
+Here, we plot the individuals PCA with their quality of representation.
+More the color of the points(individuals) are purples, the more this individuals have a good quality of representation.
+A high cos2 indicates a good representation of the variable on the main axes under consideration. In this case, the variable is set near the circumference of the correlation circle.
+
+```{r}
+fviz_pca_ind(res.pca, col.ind="cos2", geom = "point") +
+      scale_color_gradient2(low="white", mid="blue",
+      high="red", midpoint=0.6)+ theme_minimal()
+```
+
+Here **2 individuals** projected and very separated on the **first main axis** take **very different** values on many **variables**
+
+**1 individual** close to the center of gravity of the **initial cloud** takes **average** values for many **variables**.
+
+We can visualize the cos2 of variables on all dimensions using the corrplot package.
+```{r}
+#library("corrplot")
+#corrplot(var$cos2, is.corr=FALSE)
+```
+
+# Method that calculates the prediction
+
+```{r}
+calc_acc=function(predicted,actual)
+{
+  mean(predicted==actual)
+}
+```
+
+To write on the .csv to put it on kaggle.
+```{r}
+csv_write = function(x)
+{
+  to_be_submitted = data.frame(id=rownames(test_set), HeartDisease = x)
+
+  write.csv(to_be_submitted , file = "11_TAUCH_ASSADI.csv", row.names = F)
+}
+```
+
+# heat map to see correlated variables
+
+```{r}
+library(corrplot)
+corrs <- round(cor(training),2)
+corrplot.mixed(corrs,lower = 'shade', upper = 'pie', order = 'hclust')
+```
+
+Thanks to our **heat map**, we notice that **HeartDisease** is strongly correlated with **ExerciseAngina**, **Oldpeak**, **ST_Slope**, **MaxHR**, **Sex* *, **FastingBS**  and **Cholesterol**.
+
+#1 Multiple Logistic Regression Model
+
+Multiple logistic regression for all **variables**.
+
+```{r}
+model1 <- glm(HeartDisease ~., family = binomial, data = training)
+summary(model1)
+```
+
+Now, we do an **RLM** with the **high significance** variables which are the same as our **Heatmap**.
+
+```{r}
+model2 <- glm(HeartDisease ~ ExerciseAngina + Oldpeak + ST_Slope + MaxHR + Sex + FastingBS + Cholesterol ,family = binomial, data = training)
+summary(model2)
+```
+
+We use the **Binomial** family because we have only **2** possible output either **1** or **0**.
+I compare their AIC and take the best model therefore **AIC** the smallest.
+```{r}
+prediction1 <- predict(model1, testing, type = "response")
+prediction2 <- predict(model2, testing, type = "response")  
+
+prediction3 <- predict(model2, test_set, type = "response") 
+#ici d'abors on a mis teststing a la place de test_set pour voir l'accuracy.
+# On observe que la moyenne est meilleur donc je l'ai implementé dans test_set 
+
+
+predictionfinal1 <- ifelse(prediction1 > 0.5, 1,0)
+predictionfinal2 <- ifelse(prediction2 > 0.5, 1,0)  
+
+predictionfinal3 <- ifelse(prediction3 > 0.5, 1,0)  
+# puis ecrit dans une csv que j'ai soumis (la methode sera tt en bas) car la RLM donne au max 84% pas ouf (j'envoie predictionfinal2 car c'est un fichier de 0 et de 1)
+
+#predictionfinal1
+#predictionfinal2
+
+
+calc_acc(predictionfinal1, testing$HeartDisease)
+calc_acc(predictionfinal2, testing$HeartDisease)
+
+csv_write(predictionfinal3) # On écrit le fichier dans un csv
+```
+
+```{r}
+plot(model2,2)
+```
+
+
+# 2 Method Bagging
+
+Now, we are going to test the **Random Forest**.
+In addition to have the **mtry = nbr variable - 1**
+
+```{r message=FALSE, warning=FALSE}
+library(randomForest)
+bagging <- randomForest(HeartDisease ~ ., training, mtry = 11, importance = TRUE, ntrees = 500)
+bagging
+
+bagging_pred = predict(bagging,testing,type="class")     
+
+calc_acc(bagging_pred,testing$HeartDisease) 
+```
+
+We do not find a very significant model so we move on.
+
+# 3 model Random Forest
+
+Here to get the **mtry = sqrt(nbr variable - 1)**
+
+```{r warning=FALSE}
+modelerf=randomForest(HeartDisease~ .,data=training,mtry=3,importance= TRUE,ntrees=500)
+
+modelerf_pred=predict(modelerf,testing,type="class")
+
+calc_acc(modelerf_pred,testing$HeartDisease)
+```
+De même, on trouve moyenne nul je prend meme pas la peine de le transoformer en 0 1 et a submit.
+
+# 4 Method of boosting gbm
+
+```{r warning=FALSE}
+library(gbm)
+
+HD_boost=gbm(HeartDisease ~.,data=training,distribution="bernoulli",n.trees=800,interaction.depth=4,shrinkage=0.01)
+
+HD_boost_pred =  predict(HD_boost,testing,type="response")    
+HD_boost_pred2 =  predict(HD_boost,test_set,type="response")    
+
+HD_boost_pred01 = ifelse(HD_boost_pred >= 0.5, 1,0)
+HD_boost_pred02 = ifelse(HD_boost_pred2 >= 0.5, 1,0)
+
+acc_boost = calc_acc(HD_boost_pred01, testing$HeartDisease)
+acc_boost
+
+csv_write(HD_boost_pred02)
+```
+
+# Matrix of confusion
+
+```{r}
+confusion_matrix <- table(testing$HeartDisease, HD_boost_pred01)
+confusion_matrix
+```
+
+So we have **45** that is a **True positive** and **22** a **False positive** so 45 values which predict the **good answer** and **22** not. 
+The same for **6** a **False positive** and **74** a **True positive**.
+
+```{r}
+library(ROCR)
+result1 <- prediction(HD_boost_pred, testing$HeartDisease)
+Auc1 <- performance(result1, "auc")
+
+result2 <- prediction(modelerf_pred, testing$HeartDisease)
+Auc2 <- performance(result2, "auc")
+
+result3 <- prediction(bagging_pred, testing$HeartDisease)
+Auc3 <- performance(result3, "auc")
+
+result4 <- prediction(prediction2, testing$HeartDisease)
+Auc4 <- performance(result4, "auc")
+
+plot(performance(result1, "tpr", "fpr"), col = "blue")
+plot(performance(result2, "tpr", "fpr"), col = "red", add = TRUE)
+plot(performance(result3, "tpr", "fpr"), col = "green", add = TRUE)
+plot(performance(result4, "tpr", "fpr"), col = "yellow", add = TRUE)
+abline(0, 1, lty = 1)
+```
+
+Here in red the **Random Forest**, in green the **bagging**, yellow the **RLM** and finally in blue the **boosting**.
+
+We observe that the boosting represents better the model than the others.
+
+# Summarize of all models
+
+```{r}
+HD_acc = data.frame(
+  Modele = c("Logistic Regression", "Bagging",  "Random Forest",  "Boosting"),
+  Accuracy = c(calc_acc(predictionfinal2, testing$HeartDisease), calc_acc(bagging_pred,testing$HeartDisease), calc_acc(modelerf_pred,testing$HeartDisease), acc_boost)
+)
+HD_acc
+```
